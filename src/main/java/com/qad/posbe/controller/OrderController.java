@@ -3,10 +3,14 @@ package com.qad.posbe.controller;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.io.IOException;
+import java.io.OutputStream;
 
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,6 +27,7 @@ import com.qad.posbe.domain.User;
 import com.qad.posbe.domain.request.CreateOrderDTO;
 import com.qad.posbe.domain.response.ResultPaginationDTO;
 import com.qad.posbe.service.OrderService;
+import com.qad.posbe.service.PdfExportService;
 import com.qad.posbe.service.UserService;
 import com.qad.posbe.util.SecurityUtil;
 import com.qad.posbe.util.annotation.ApiMessage;
@@ -30,8 +35,14 @@ import com.qad.posbe.util.constant.PaymentMethod;
 import com.qad.posbe.util.constant.PaymentStatus;
 import com.turkraft.springfilter.boot.Filter;
 
+import jakarta.servlet.ServletOutputStream;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/api/v1/orders")
@@ -39,6 +50,8 @@ import lombok.RequiredArgsConstructor;
 public class OrderController {
     private final OrderService orderService;
     private final UserService userService;
+    private final PdfExportService pdfExportService;
+    private static final Logger log = LoggerFactory.getLogger(OrderController.class);
     
     @PreAuthorize("hasAnyRole('admin', 'employee')")
     @PostMapping
@@ -132,5 +145,65 @@ public class OrderController {
         Order updatedOrder = orderService.updateOrder(order);
         
         return ResponseEntity.ok(updatedOrder);
+    }
+    
+    @GetMapping(value = "/{id}/invoice", produces = MediaType.APPLICATION_PDF_VALUE)
+    @PreAuthorize("hasAnyRole('admin', 'employee')")
+    @ApiMessage("Xuất hóa đơn PDF thành công")
+    public ResponseEntity<Resource> generateInvoice(@PathVariable("id") Long id) {
+        try {
+            // Kiểm tra đơn hàng tồn tại
+            orderService.getOrderById(id)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy đơn hàng với ID: " + id));
+            
+            // Tạo hóa đơn PDF
+            byte[] pdfContent = pdfExportService.generateInvoicePdf(id);
+            
+            if (pdfContent == null || pdfContent.length == 0) {
+                throw new RuntimeException("Không thể tạo nội dung PDF cho đơn hàng ID: " + id);
+            }
+            
+            // Tạo resource từ byte array
+            ByteArrayResource resource = new ByteArrayResource(pdfContent);
+            
+            // Thiết lập headers cho phản hồi
+            HttpHeaders headers = new HttpHeaders();
+            headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=invoice-" + id + ".pdf");
+            
+            // Trả về response với resource PDF
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .contentLength(pdfContent.length)
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .body(resource);
+        } catch (Exception e) {
+            // Log lỗi và ném ngoại lệ
+            log.error("Lỗi khi tạo hóa đơn PDF cho đơn hàng ID: {}: {}", id, e.getMessage());
+            throw new RuntimeException("Lỗi khi tạo hóa đơn PDF: " + e.getMessage(), e);
+        }
+    }
+
+    // Thêm API để kiểm tra tình trạng của chức năng xuất PDF
+    @GetMapping("/check-pdf-generation")
+    @PreAuthorize("hasRole('admin')")
+    public ResponseEntity<Map<String, Object>> checkPdfGeneration() {
+        Map<String, Object> result = new HashMap<>();
+        
+        try {
+            // Kiểm tra iText đã được cấu hình đúng
+            boolean fontSupported = pdfExportService.checkFontAvailability();
+            
+            result.put("success", true);
+            result.put("fontSupported", fontSupported);
+            result.put("fontInfo", pdfExportService.getFontInfo());
+            
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            result.put("success", false);
+            result.put("error", e.getMessage());
+            result.put("errorType", e.getClass().getName());
+            log.error("Lỗi khi kiểm tra chức năng xuất PDF: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
+        }
     }
 } 
