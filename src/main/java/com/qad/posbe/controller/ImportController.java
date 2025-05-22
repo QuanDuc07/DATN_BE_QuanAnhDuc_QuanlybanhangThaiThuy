@@ -43,7 +43,7 @@ public class ImportController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('admin', 'employee')")
+    @PreAuthorize("hasAnyRole('admin')")
     @ApiMessage("Lấy thông tin lịch sử nhập hàng thành công")
     public ResponseEntity<ImportHistoryResponse> getImportHistoryById(@PathVariable("id") Long id) {
         ImportHistory entity = importService.getImportHistoryById(id);
@@ -52,7 +52,7 @@ public class ImportController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('admin', 'employee')")
+    @PreAuthorize("hasAnyRole('admin')")
     @ApiMessage("Lấy danh sách lịch sử nhập hàng thành công")
     public ResponseEntity<ResultPaginationDTO> getAllImportHistories(
             @Filter Specification<ImportHistory> importSpec,
@@ -82,7 +82,7 @@ public class ImportController {
     // }
 
     @GetMapping("/supplier/{supplierId}")
-    @PreAuthorize("hasAnyRole('admin', 'employee')")
+    @PreAuthorize("hasAnyRole('admin')")
     @ApiMessage("Lấy danh sách lịch sử nhập hàng theo nhà cung cấp thành công")
     public ResponseEntity<List<ImportHistoryResponse>> getImportHistoriesBySupplier(@PathVariable("supplierId") Long supplierId) {
         List<ImportHistory> entities = importService.getImportHistoriesBySupplier(supplierId);

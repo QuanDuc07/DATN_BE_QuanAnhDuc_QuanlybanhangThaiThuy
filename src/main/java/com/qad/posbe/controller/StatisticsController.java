@@ -19,7 +19,7 @@ public class StatisticsController {
     private final StatisticsService statisticsService;
 
     @GetMapping("/details")
-    @PreAuthorize("hasAnyRole('admin')")
+    @PreAuthorize("hasAnyRole('admin', 'employee')")
     @ApiMessage("Lấy thống kê doanh thu thành công")
     public ResponseEntity<StatisticsResponse> getRevenueStatistics(
             @RequestParam(name = "month", required = true) int month,
